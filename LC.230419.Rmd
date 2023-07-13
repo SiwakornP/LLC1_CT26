@@ -1,0 +1,992 @@
+---
+title: "LLC1 (3 Batchs)+ CT26 (2 Batchs)"
+author: "Siwakorn"
+date: "2023-03-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(harmony)
+```
+
+```{r}
+col_orange =  c("grey","yellow","orange","red")
+
+scale_orange = scale_color_gradientn(colours = c("grey","yellow","orange","red"), values = c(0,0.1,0.5,1))
+scale_ig = scale_color_gradientn(colours = c("grey","#120078","#9d0191","#fd3a69","#fecd1a"), values = c(0,0.1,0.3,0.6,1))
+scale_viridis = scale_color_gradientn(colours = c("grey",c(viridis::viridis(6))[1:5],"#fecd1a" ) )
+Dot_axis90A = theme(axis.text.x =  element_text(size = 15, angle = 90, hjust = 1, vjust = 0.3,color = "black",face ="italic"), axis.text.y = element_text(size = 15,color = "black")) 
+
+Clustering1 <- function(tmp,dim=30,res=0.3,spread =1, dist = 0.5,group = "ID" ){
+      DefaultAssay(tmp) = "RNA"
+      tmp <- NormalizeData(tmp) %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(verbose = FALSE)
+      tmp <- RunHarmony(tmp, group.by.vars = group)
+      tmp <- RunUMAP(tmp, reduction = "harmony", dims = 1:dim, min.dist = dist, spread = spread )
+      tmp <- FindNeighbors(tmp, reduction = "harmony", dims = 1:dim) %>% FindClusters(resolution = res)
+      return(tmp)
+}
+```
+
+```{r}
+geneSet = list()
+geneSet$Markers.Lineage = c("Ptprc","Cd3d","Nkg7","Csf1r","Csf3r","Ms4a1","Cd19","Igkc","Mki67","Col1a1","Kit","Hdc","Col1a1","Col1a2","Ccl8",'Col3a1',"Col18a1","Col4a1")
+geneSet$Markers <- c(
+                   "Ncr1","Klra3","Fcer1g","Gzma","Nkg7","Gzmb","Prf1","Klr8","Il2rb","Xcl1",
+                   "Cd3d","Trac","Trbc1","Trbc2","Cd8a","Cd8b1","Pdcd1","Ifng","Tox","Havcr2","Tcf7",
+                   "Cd4","Icos","Foxp3","Ctla4","CD274","Tnfrsf9","Tnfrsf18",
+                   "Trdc",
+                   "Cd79b","Cd19","Ms4a1","Igkc","Ighd","Ighm",
+                   "Csf1r","C1qa","Adgre1","C1qa","Ccl7","Ccl12","Apoe","Axl",
+                   "Vcan","Il1b","Cxcl1","Spp1","Cxlc2","Cxcl1","Tgfbi", "Arg1","Vegfa","Cd274","Egln3","Gpnmb",
+                   "Irf7","Ifi203","Mx1","Cxcl10","Fcgr1",
+                   "Csf3r","S100a8","S100a9","Cxcl3","Retnlg","Il1r2","Il1f9","Arg2","Cxcr2","Csf3","Hcar2","Cxcl2","Il1b","Isg15",
+                   "H2-Ab1","H2-Eb1","H2-DMb1","H2-Oa","H2-DMb2",
+                   "Xcr1","Itgae","Btla",
+                   "Itgax","Cd74","Cd209a","Ccl17",
+                   "Ccr7","Ccl5","Il12b","Il4i1","Ccl22","Ly75",
+                   "Clec10a","Gpr171","Siglech","Ccr9","Iglc3","Cd300c",
+                   "Mki67","Hist1h3c","Cdca8","Hmgb1"
+                   ) %>% intersect(rownames(LC))
+geneSet$Markers.TNK = c("Cd3e","Cd4","Cd8a","Nkg7","Foxp3","Trdc","Tcrg-C4","Klra5","Tcrg-C1","Il2ra","Mki67","Igkc","Isg15","Csf3r","percent.mt")
+geneSet$Markers.Myeliod = c("Csf1r","Csf3r","Adgre1","C1qa","C1qb","Axl","Mertk","Mrc1","Ptgs2","Ptger2","Vcan","Il1b","Ptgs1","Ptger4","Vegfa","Spp1","Isg15","Ifit1","Mki67",
+                            "Arg1","H2-Ab1","H2-Eb1","H2-Oa","H2-DMb1","H2-DMb2",
+                            "Itgax","Itgam","Clec9a","Xcr1","Lamp3","Ccr7","Clec10a","Siglech",
+                            "Igkc","Malat1")
+```
+
+#Initiation
+```{r}
+library(Seurat)
+library(SeuratWrappers)
+library(harmony)
+library(tidyverse)
+options(future.globals.maxSize = 100000 * 1024^2)
+
+Clustering1 <- function(tmp,dim=30,res=0.3,spread =1, dist = 0.5,group = "ID" ){
+      DefaultAssay(tmp) = "RNA"
+      tmp <- NormalizeData(tmp) %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(verbose = FALSE)
+      tmp <- RunHarmony(tmp, group.by.vars = group)
+      tmp <- RunUMAP(tmp, reduction = "harmony", dims = 1:dim, min.dist = dist, spread = spread )
+      tmp <- FindNeighbors(tmp, reduction = "harmony", dims = 1:dim) %>% FindClusters(resolution = res)
+      return(tmp)
+}
+
+Batch = c(rep("Day6",6),rep("Day1.5",6),rep("Day14",5))
+Condition = c("Control","Control","EP2i","EP4i","EP2iEP4i","EP2iEP4i",
+	      "Control","Control","Control","EP2iEP4i","EP2iEP4i","EP2iEP4i", 
+              "Control","Control","Depletion","Depletion","EP2iEP4i" )
+ID =  c("Day6_Control1","Day6_Control2","Day6_EP2i","Day6_EP4i","Day6_EP2iEP4i1","Day6_EP2iEP4i2",
+        "Day1.5_Control1","Day1.5_Control2","Day1.5_Control3","Day1.5_EP2iEP4i1","Day1.5_EP2iEP4i2","Day1.5_EP2iEP4i3",
+        "Day14_Control1","Day14_Control2","Day14_DT1","Day14_DT2","Day14_EP2iEP4i")
+
+data.dir = c(
+      "//home/siwakorn/LLC/CountMatrix/scRNA1_no1/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA1_no2/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA1_no3/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA1_no4/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA1_no5/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA1_no6/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA2_no1/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA2_no2/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA2_no3/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA2_no4/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA2_no5/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA2_no6/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA3_no1/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA3_no2/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA3_no3/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA3_no4/filtered_feature_bc_matrix/",
+      "//home/siwakorn/LLC/CountMatrix/scRNA3_no6/filtered_feature_bc_matrix/")
+
+LLC <- list()
+
+for(i in 1:length(data.dir)){
+      print(ID[i])
+      tmp = Read10X(data.dir = data.dir[i]  )
+      tmp1 = rownames(tmp)
+      tmp1 = gsub("mm10___","",tmp1)
+      rownames(tmp) = tmp1
+      LLC[[i]] <- CreateSeuratObject(counts = tmp, project = "LLC1", min.cells = 3, min.features = 0)
+      LLC[[i]][["percent.mt"]] <- PercentageFeatureSet(LLC[[i]], pattern = "^mt-")
+      LLC[[i]]$CB.original = colnames(LLC[[i]])
+      LLC[[i]]$Batch = Batch[i]
+      LLC[[i]]$Condition <- Condition[i]
+      LLC[[i]]$ID <- ID[i]
+      LLC[[i]]$CB.new = paste0("LLC1_",LLC[[i]]$ID,":", colnames(LLC[[i]]) )
+      LLC[[i]]$CB.new = gsub("-1","x",LLC[[i]]$CB.new)
+      LLC[[i]] <- RenameCells(LLC[[i]], new.names = LLC[[i]]$CB.new )
+}
+saveRDS(LLC, file = "//home/siwakorn/Mouse/RDS/LLC.230328.rds")
+
+print("Merging1")
+
+tmp <- merge(x = LLC[[1]],
+		       y = LLC[2:length(LLC)],
+		       merge.data = TRUE)
+LLC = tmp 
+tmp = 0
+
+
+print("CT26")
+
+Batch = c(rep("Batch1",3),rep("Batch2",2),rep("Batch1",3),rep("Batch2",6))
+Condition = c(rep("Control",5),rep("EP4i",5),"PD1i","PD1i","PD1iEP4i","PD1iEP4i")
+ID = c(paste0("Control",1:5),
+         paste0("EP4i",1:5),
+         "PD1i1","PD1i2","PD1iEP4i1","PD1iEP4i2")
+
+CellRangerDir = paste0("//home/siwakorn/CT26/Counts/",ID, "/filtered_feature_bc_matrix")
+CT26 = list()
+for(i in 1:length(CellRangerDir)){
+      print(ID[i])
+      tmp = Read10X(data.dir = CellRangerDir[i]  )
+      CT26[[i]] <- CreateSeuratObject(counts = tmp,project = "CT26", min.cells = 3, min.features = 0)
+      CT26[[i]][["percent.mt"]] <- PercentageFeatureSet(CT26[[i]], pattern = "^mt-")
+      CT26[[i]]$CB.original = colnames(CT26[[i]])
+      CT26[[i]]$Batch = Batch[i]
+      CT26[[i]]$Condition <- as.character(Condition[i])
+      CT26[[i]]$ID <- as.character(ID[i])
+      CT26[[i]]$CB.new = paste0("CT26_",CT26[[i]]$ID, ":", colnames(CT26[[i]]) )
+      CT26[[i]]$CB.new = gsub("-1","x",CT26[[i]]$CB.new)
+      CT26[[i]] <- RenameCells(CT26[[i]], new.names = CT26[[i]]$CB.new )
+}
+saveRDS(CT26, file = "//home/siwakorn/Mouse/RDS/CT26.230328.rds")
+print("Merging2")
+tmp <- merge(x = CT26[[1]],
+		       y = CT26[2:length(CT26)],
+		       merge.data = TRUE)
+CT26 = tmp 
+tmp = 0
+
+RNA = merge(LLC,CT26)
+LLC = 0
+CT26 = 0
+gc()
+
+print("Integration")
+RNA = NormalizeData(RNA) %>% FindVariableFeatures() %>% ScaleData() %>% RunPCA(verbose = FALSE)
+RNA = RunHarmony(RNA, group.by.vars = "ID" )
+
+saveRDS(RNA, file = "//home/siwakorn/Mouse/RDS/LC.230328.Unfilter.rds")
+
+RNA = subset(RNA, percent.mt < 10)
+RNA = Clustering1(RNA)
+saveRDS(RNA, file = "//home/siwakorn/Mouse/RDS/LC.230328.QC.rds")
+
+```
+
+```{r}
+LC = readRDS(file = "//home/siwakorn/Mouse/RDS/LC.230328.QC.rds")
+```
+
+```{r}
+DimPlot(LC, label =T)
+for(i in c("Ptprc","Cd3d","Cd8a","Foxp3","Nkg7","Csf1r","Csf3r","Igkc","Mki67","Hdc") ){
+      print(FeaturePlot(LC,i))
+}
+```
+
+#Identity.Celltype
+```{r,fig.width=16, fig.height=6}
+DotPlot(LC,features = geneSet$Markers) + Dot_axis90A + scale_viridis
+
+```
+
+```{r}
+LC = RenameIdents(LC,
+                  '3' = "TNK",
+                  '8' = "TNK",
+                  '10' = "TNK",
+                  '14' ="TAN",
+                  '4' = "TAN",
+                  '0' = "Myeloid",
+                  '1' = "Myeloid",
+                  '2' = "Myeloid",
+                  '9' = "DC",
+                  '11' = "DC",
+                  '12' = "DC",
+                  '15' = "DC",
+                  '18' = "B_cell",
+                  '5' = "Dividing",
+                  '17' = "Dividing",
+                  '6' = "Fibroblast",
+                  '7' = "Minor",
+                  '13' = "Minor",
+                  '16' = "Minor",
+                  '19' = "Minor",
+                  '20' = "Minor"
+                  )
+LC$Identity.Lineage = Idents(LC)
+saveRDS(LC, file = "//home/siwakorn/Mouse/RDS/LC.230329.rds")
+LC = readRDS(file = "//home/siwakorn/Mouse/RDS/LC.230329.rds")
+
+TNK = subset(LC, idents = "TNK")
+M = subset(LC, idents = c("Myeloid","DC") )
+Div = subset(LC, idents = "Dividing")
+
+
+TNK = Clustering1(TNK)
+M = Clustering1(M)
+Div = Clustering1(Div)
+```
+
+##TNK
+```{r}
+for(i in geneSet$Markers.TNK){
+      print(FeaturePlot(TNK,i,cols =  col_orange))
+}
+TNK = RenameIdents(TNK,
+                     '0' = "NK",
+                     '2' = "NK",
+                     '8' = "NK",
+                     '12' = "NK",
+                     '1' = "T_CD8",
+                     '7' = "T_CD8",
+                     '13' = "T_CD4",
+                     '6' = "T_CD4_Foxp3",
+                     '10' = "T_GD",
+                     '3' = "Mix",
+                     '4' = "Doublet",
+                     '11' = "Doublet",
+                     '9' = "LQ",
+                     '5' = "LQ",
+                     '14' = "LQ"
+                   )
+TNK$Identity.Celltype = Idents(TNK)
+
+Mix = subset(TNK, idents = "Mix")
+Mix = Clustering1(Mix)
+Mix = RenameIdents(Mix,
+                   '0' = "T_GD",
+                   '1' = "T_CD4",
+                   '2' = "T_CD8",
+                   '3' = "Mix2",
+                   '4' = "LQ",
+                   '5' = "T_CD4",
+                   '6' = "Mix2",
+                   '7' = "Mix2"
+                   )
+Mix$Identity.Celltype = Idents(Mix)
+
+Mix2 = subset(Mix,idents = "Mix2")
+Mix2 = Clustering1(Mix2 , res =1.5)
+Mix2 = RenameIdents(Mix2, 
+                    '0' = "T_GD",
+                    '1' = "T_CD8",
+                    '2' = "T_CD4",
+                    '3' = "T_CD4",
+                    '4' = "T_CD8",
+                    '5' = "T_CD4",
+                    '6' = "T_CD4",
+                    '7' = "LQ",
+                    '8' = "T_GD",
+                    '9' = "T_CD8",
+                    '10' = "T_CD4")
+Mix2$Identity.Celltype = Idents(Mix2)
+
+tmp1 = TNK[[]] %>% dplyr::select(Identity.Celltype) %>% filter(!Identity.Celltype == "Mix")
+tmp2 = Mix[[]] %>% dplyr::select(Identity.Celltype) %>% filter(!Identity.Celltype == "Mix2")
+tmp3 = Mix2[[]] %>% dplyr::select(Identity.Celltype)
+tmp =rbind(tmp1,tmp2,tmp3)
+tmp1 = tmp$Identity.Celltype
+names(tmp1) = rownames(tmp)
+TNK = AddMetaData(TNK, tmp1, "Identity.Celltype")
+Idents(TNK) = TNK$Identity.Celltype
+```
+
+##TIM + DC
+```{r}
+Idents(M) = M$seurat_clusters
+M = RenameIdents(M,
+                     '0' = "TIM_C1qa",
+                     '1' = "TIM_Vcan",
+                     '2' = "TIM_Vcan",
+                     '3' = "TIM_Vcan",
+                     '4' = "TIM_Vcan",
+                     '5' = "cDC2",
+                     '6' = "cDC1",
+                     '7' = "pDC",
+                     '8' = "TIM_C1qa",
+                     '9' = "Doublet",
+                     '10' = "mregDC",
+                     '11' = "TIM_C1qa",
+                     '12' = "LQ"     )
+M$Identity.Celltype = Idents(M)
+DimPlot(M)
+```
+
+
+```{r}
+Vcan = subset(M, idents = "TIM_Vcan")
+Vcan = Clustering1(Vcan)
+Idents(Vcan) = Vcan$seurat_clusters
+Vcan = RenameIdents(Vcan, 
+                     '0' = "TIM_C1qa",
+                     '1' = "TIM_Vcan",
+                     '2' = "TIM_Vcan",
+                     '3' = "TIM_Vcan",
+                     '4' = "Mix",
+                     '5' = "TIM_Vcan",
+                     '6' = "TIM_C1qa",
+                     '7' = "TIM_C1qa"
+                    )
+Vcan$Identity.Celltype = Idents(Vcan)
+
+Mix = subset(Vcan, idents ="Mix")
+Mix = Clustering1(Mix)
+Mix = RenameIdents(Mix,'0' = "TIM_C1qa",'1' = "TIM_Vcan",'2' = "Mix", '3' ="TIM_Vcan")
+Mix$Identity.Celltype = Idents(Mix)
+
+Mix2 = subset(Mix, idents = "Mix")
+Mix2 = Clustering1(Mix2)
+Mix2 = RenameIdents(Mix2,'0' = "TIM_Vcan",'1' = "TIM_Vcan",'2' = "TIM_C1qa", '3' ="TIM_Vcan")
+Mix2$Identity.Celltype = Idents(Mix2)
+
+tmp0 = M[[]] %>% dplyr::select(Identity.Celltype) %>% filter(!Identity.Celltype == "TIM_Vcan")
+tmp1 = Vcan[[]] %>% dplyr::select(Identity.Celltype) %>% filter(!Identity.Celltype == "Mix")
+tmp2 = Mix[[]] %>% dplyr::select(Identity.Celltype) %>% filter(!Identity.Celltype == "Mix")
+tmp3 = Mix2[[]] %>% dplyr::select(Identity.Celltype)
+tmp = rbind(tmp0, tmp1,tmp2,tmp3)
+
+tmp1 = tmp$Identity.Celltype
+names(tmp1) = rownames(tmp)
+
+M = AddMetaData(M, tmp1, "Identity.Celltype")
+Idents(M) = M$Identity.Celltype
+```
+
+
+
+##Div
+```{r}
+DimPlot(Div,label=T)
+Idents(Div) = Div$RNA_snn_res.0.3
+Div = RenameIdents(Div,
+                     '0' = "TIM_C1qa",
+                     '1' = "TIM_C1qa",
+                     '2' = "T_CD8",
+                     '3' = "Fibroblast",
+                     '4' = "NK",
+                     '5' = "Doublet",
+                     '6' = "TIM_Vcan",
+                     '7' = "TIM_C1qa",
+                     '8' = "T_CD4_Foxp3",
+                     '9' = "TIM_C1qa",
+                     '10' = "LQ"
+                   )
+Div$Identity.Celltype = Idents(Div)
+```
+
+Idents(Div) = Div$RNA_snn_res.0.3
+Div = RenameIdents(Div,
+                     '0' = "TIM_C1qa_Dividing",
+                     '1' = "TIM_C1qa_Dividing",
+                     '2' = "T_CD8_Dividing",
+                     '3' = "Fibroblast_Dividing",
+                     '4' = "NK_Dividing",
+                     '5' = "Doublet",
+                     '6' = "TIM_Vcan_Dividing",
+                     '7' = "TIM_C1qa_Dividing",
+                     '8' = "T_CD4_Foxp3_Dividing",
+                     '9' = "TIM_C1qa_Dividing",
+                     '10' = "LQ"
+                   )
+Div$Identity.Subtype1 = Idents(Div)
+
+#RenameIdents
+```{r}
+LC$Identity.Celltype = LC$Identity.Lineage
+tmp1 = LC[[]] %>% dplyr::select(Identity.Celltype) %>% filter(!Identity.Celltype %in% c("TNK","Myeloid","DC","Dividing"))
+tmp2 = M[[]] %>% dplyr::select(Identity.Celltype) 
+tmp3 = TNK[[]] %>% dplyr::select(Identity.Celltype) 
+tmp4 = Div[[]] %>% dplyr::select(Identity.Celltype) 
+tmp = rbind(tmp1,tmp2,tmp3,tmp4)
+tmp$Identity.Celltype %>% unique()
+tmp1 = tmp$Identity.Celltype
+names(tmp1) = rownames(tmp)
+LC = AddMetaData(LC, tmp1, "Identity.Celltype")
+Idents(LC) = LC$Identity.Celltype
+LC = RenameIdents(LC, 'T_CD4_Foxp3' = "Treg")
+LC$Identity.Celltype = Idents(LC)
+LC$Identity.Celltype = factor(LC$Identity.Celltype, levels = c("NK","T_CD8","T_CD4","Treg","T_GD","TAN","TIM_C1qa","TIM_Vcan","cDC1","cDC2","mregDC","pDC","B_cell","Fibroblast","Minor","Doublet","LQ"))
+Idents(LC) = LC$Identity.Celltype
+DimPlot(LC,label=T)
+```
+
+```{r}
+NK = subset(LC, idents = "NK")
+NK = Clustering1(NK)
+DimPlot(NK,label =T)
+geneSet$Markers.NK = c("Cd3e","Trdc","Trac","Csf1r","Nkg7","Ccl5","Bach2","Il18rap","Ccl3","Klf2","Gzme","Gzmc","Xcl1","Ifitm1","Ifitm2","Rora","Ikzf2","Nme1","Gzmb","Mki67","Hmgb2","Top2a","Klra4","Klra9","Mcm3","Mcm5","Mcm6","Isg15","Ifi203","Ifi44","Cd3e","Trac","Hist1h2ae")
+for(i in geneSet$Markers.NK){
+  print(FeaturePlot(NK, i, cols = col_orange))
+}
+Idents(NK) = NK$RNA_snn_res.0.3
+NK = RenameIdents(NK,
+                  '0' = "NK_Ccl5",
+                  '3' = "NK_Ccl5",
+                  '2' = "NK_Xcl1",
+                  '1' = "NK_Gzmc",
+                  '5' = "NK_Klra8",
+                  '7' = "NK_Isg15",
+                  '4' = "NK_Dividing",
+                  '6' = "NK_Dividing",
+                  '8' = "T_CD8_Dividing")
+NK$Identity.Subtype1 = Idents(NK)
+Idents(NK) = NK$RNA_snn_res.0.3
+NK = RenameIdents(NK,
+                  '0' = "NK_Ccl5_s1",
+                  '3' = "NK_Ccl5_s2",
+                  '2' = "NK_Xcl1",
+                  '1' = "NK_Gzmc",
+                  '5' = "NK_Klra8",
+                  '7' = "NK_Isg15",
+                  '4' = "NK_Dividing_s1",
+                  '6' = "NK_Dividing_s2",
+                  '8' = "T_CD8_Dividing_s2")
+NK$Identity.Subtype2 = Idents(NK)
+Idents(NK) = NK$RNA_snn_res.0.3
+NK = RenameIdents(NK,
+                  '0' = "NK",
+                  '3' = "NK",
+                  '2' = "NK",
+                  '1' = "NK",
+                  '5' = "NK",
+                  '7' = "NK",
+                  '4' = "NK_Dividing",
+                  '6' = "NK_Dividing",
+                  '8' = "T_CD8_Dividing")
+NK$Identity.Celltype2 = Idents(NK)
+DimPlot(NK,label=T)
+```
+
+```{r}
+CD8 = subset(LC, idents = "T_CD8")
+CD8 = Clustering1(CD8)
+Idents(CD8) = CD8$RNA_snn_res.0.3
+CD8 = RenameIdents(CD8,
+                   '3' = "T_CD8_Tcf7",
+                   '4' = "T_CD8_Tcf7",
+                   '0' = "T_CD8_Havcr2",
+                   '5' = "T_CD8_Isg",
+                   '8' = "T_CD8_Ifng",
+                   '1' = "T_CD8_Dividing",
+                   '2' = "T_CD8_Dividing",
+                   '6' = "T_CD8_Dividing",
+                   '7' = "Doublet",
+                   '9' = "LQ")
+CD8$Identity.Subtype1 = Idents(CD8)
+Idents(CD8) = CD8$RNA_snn_res.0.3
+CD8 = RenameIdents(CD8,
+                   '3' = "T_CD8_Tcf7_s1",
+                   '4' = "T_CD8_Tcf7_s2",
+                   '0' = "T_CD8_Havcr2",
+                   '5' = "T_CD8_Isg",
+                   '8' = "T_CD8_Ifng",
+                   '1' = "T_CD8_Dividing_s1",
+                   '2' = "T_CD8_Dividing_s2",
+                   '6' = "T_CD8_Dividing_s3",
+                   '7' = "Doublet",
+                   '9' = "LQ")
+CD8$Identity.Subtype2 = Idents(CD8)
+Idents(CD8) = CD8$RNA_snn_res.0.3
+CD8 = RenameIdents(CD8,
+                   '3' = "T_CD8",
+                   '4' = "T_CD8",
+                   '0' = "T_CD8",
+                   '5' = "T_CD8",
+                   '8' = "T_CD8",
+                   '1' = "T_CD8_Dividing",
+                   '2' = "T_CD8_Dividing",
+                   '6' = "T_CD8_Dividing",
+                   '7' = "Doublet",
+                   '9' = "LQ")
+CD8$Identity.Celltype2 = Idents(CD8)
+DimPlot(CD8,label=T)
+
+```
+```{r}
+Treg = subset(LC, idents = "Treg")
+Treg = Clustering1(Treg)
+tmp = FindAllMarkers(Treg, max.cells.per.ident = 200)
+tmp %>% group_by(cluster) %>% top_n(n=30, wt=avg_log2FC)
+geneSet$Markers.CD4 = c("Stat5b","Aff1","Aff3","Bach2","Prkca","Tox","Runx1","Klf2","Ikzf3","Col3a1","Csf1r","Ifitm1","Ifitm2","Il2ra","Runx2","Bcl2","Sdf4","Lag3","Cd200","Pdcd1","Ifng")
+geneSet$Markers.Treg = c("Cd3d","Cd4","Cd8a","Csf1r","Mki67","Foxp3","Il2ra","Stat5b","Tnfrsf9","mt-Co1","Malat1") 
+Idents(Treg) = Treg$RNA_snn_res.0.3
+Treg = RenameIdents(Treg,
+                    '0' = "Treg",
+                    '1' = "Treg",
+                    '2' = "Treg",
+                    '4' = "Treg_Dividing",
+                    '5' = "Treg_Dividing",
+                    '6' = "T_CD8_Foxp3",
+                    '3' = "LQ"
+                    )
+Treg$Identity.Subtype1 = Idents(Treg)
+Idents(Treg) = Treg$RNA_snn_res.0.3
+Treg = RenameIdents(Treg,
+                    '0' = "Treg_s1",
+                    '1' = "Treg_s2",
+                    '2' = "Treg_s3",
+                    '4' = "Treg_Dividing_s1",
+                    '5' = "Treg_Dividing_s2",
+                    '6' = "T_CD8_Foxp3",
+                    '3' = "LQ"
+                    )
+Treg$Identity.Subtype2 = Idents(Treg)
+Idents(Treg) = Treg$RNA_snn_res.0.3
+Treg = RenameIdents(Treg,
+                    '0' = "Treg",
+                    '1' = "Treg",
+                    '2' = "Treg",
+                    '4' = "Treg_Dividing",
+                    '5' = "Treg_Dividing",
+                    '6' = "T_CD8",
+                    '3' = "LQ"
+                    )
+Treg$Identity.Celltype2 = Idents(Treg)
+```
+
+
+
+```{r}
+C1qa = subset(LC, idents = c("TIM_C1qa"))
+C1qa = Clustering1(C1qa,dist = 0.1, spread = 2 )
+tmp1 = FindAllMarkers(C1qa, max.cells.per.ident = 200)
+tmp1 %>% filter(pct.2 < 0.3) %>% group_by(cluster) %>% top_n(n=30, wt=avg_log2FC)
+geneSet$Markers.C1qa =  c("Csf1r","Csf3r","Mki67","C1qa","Adgre1","Vcan","Spp1","S100a8","Axl","Gas6","Il1b","Isg15","Arg1","Vegfa","Retnla","Ptger4","Ptgs1","Ptgs2","Cd24a","Ndrg1","Ccl8","Clec10a","Cxcl9")
+Idents(C1qa) =  C1qa$RNA_snn_res.0.3
+C1qa = RenameIdents(C1qa,
+                    '0' = "TIM_C1qa_Fcrls",
+                    '1' = "TIM_C1qa_Cd24a",
+                    '3' = "TIM_C1qa_Isg",
+                    '7' = "TIM_C1qa_Ndrg1",
+                    '2' = "TIM_C1qa_Cxcl9",
+                    '8' = "TIM_C1qa_Clec10a",
+                    '5' = "TIM_C1qa_Dividing_s1",
+                    '6' = "TIM_C1qa_Dividing_s2",
+                    '4' = "TIM_C1qa_Dividing_s3",
+                    '9' = "LQ")
+C1qa$Identity.Subtype2 = Idents(C1qa)
+Idents(C1qa) =  C1qa$RNA_snn_res.0.3
+C1qa = RenameIdents(C1qa,
+                    '0' = "TIM_C1qa",
+                    '1' = "TIM_C1qa",
+                    '3' = "TIM_C1qa",
+                    '7' = "TIM_C1qa",
+                    '2' = "TIM_C1qa",
+                    '8' = "TIM_C1qa",
+                    '5' = "TIM_C1qa_Dividing",
+                    '6' = "TIM_C1qa_Dividing",
+                    '4' = "TIM_C1qa_Dividing",
+                    '9' = "LQ")
+C1qa$Identity.Celltype2 = Idents(C1qa)
+C1qa$Identity.Subtype1 = Idents(C1qa)
+
+DotPlot(C1qa, features = geneSet$Markers.C1qa )+Dot_axis90A + scale_ig
+```
+
+```{r}
+Vcan = subset(LC, idents = "TIM_Vcan")
+Vcan = Clustering1(Vcan,dist = 0.1, spread = 2 )
+tmp2 = FindAllMarkers(Vcan, max.cells.per.ident = 200)
+tmp2 %>% group_by(cluster) %>% top_n(n=30, wt=avg_log2FC)
+tmp2 %>% filter(pct.2 < 0.3) %>% group_by(cluster) %>% top_n(n=30, wt=avg_log2FC)
+geneSet$Markers.Vcan =  c("Csf1r","Csf3r","Mki67","C1qa","Adgre1","Vcan","Spp1","Il7r","Cxcl1","Cxcl3","Il1a","Tnfrsf9","Isg15","Cxcl9","H2-DMb1","Clec12a","Axl","Isg15","Ifit2","Cx3cr1")
+
+
+
+Vcan = RenameIdents(Vcan,
+                    '0' = "TIM_Vcan_Cxcl3",
+                    '1' = "TIM_Vcan_Ifi202b",
+                    '4' = "TIM_Vcan_Isg",
+                    '2' = "TIM_Vcan_Cd244",
+                    '3' = "TIM_Vcan_Cxcl9",
+                    '5' = "TIM_Vcan_Cx3cr1",
+                    '6' = "LQ")
+Vcan$Identity.Subtype2 = Idents(Vcan)
+Idents(Vcan) = Vcan$RNA_snn_res.0.3
+Vcan = RenameIdents(Vcan,
+                    '0' = "TIM_Vcan",
+                    '1' = "TIM_Vcan",
+                    '4' = "TIM_Vcan",
+                    '2' = "TIM_Vcan",
+                    '3' = "TIM_Vcan",
+                    '5' = "TIM_Vcan",
+                    '6' = "LQ")
+Vcan$Identity.Subtype1 = Idents(Vcan)
+Vcan$Identity.Celltype2 = Idents(Vcan)
+DotPlot(Vcan, features = c("C1qa","Adgre1","Vcan") )
+
+```
+
+
+
+
+```{r}
+Tan = subset(LC, idents = "TAN")
+Tan = Clustering1(Tan)
+Tan = RenameIdents(Tan,
+                   '0' = "TAN-PMN_s1",
+                   '1' = "TAN-PMN_s1",
+                   '2' = "TAN-PMN_s2",
+                   '3' = "TAN-PMN_s1",
+                   '4' = "TAN-PMN_s1",
+                   '5' = "TAN-PMN_s1",
+                   '6' = "TAN-PMN_s2",
+                   '7' = "TAN-PMN_s1")
+Tan$Identity.Celltype2= Idents(Tan)
+Tan$Identity.Subtype1= Idents(Tan)
+Tan$Identity.Subtype2= Idents(Tan)
+DimPlot(Tan,label =T)
+
+```
+
+
+```{r}
+tmp1 = LC[[]] %>% dplyr::select(Identity.Celltype) %>% filter(!Identity.Celltype %in% c("NK","T_CD8","Treg","TIM_C1qa","TIM_Vcan","TAN"))
+tmp1$Identity.Celltype2 = tmp1$Identity.Celltype
+tmp1$Identity.Subtype1 = tmp1$Identity.Celltype
+tmp1$Identity.Subtype2 = tmp1$Identity.Celltype
+
+tmp2 = NK[[]]  %>% dplyr::select(Identity.Celltype,Identity.Celltype2,Identity.Subtype1,Identity.Subtype2)
+tmp3 = CD8[[]]  %>% dplyr::select(Identity.Celltype,Identity.Celltype2,Identity.Subtype1,Identity.Subtype2)
+tmp4 = C1qa[[]]  %>% dplyr::select(Identity.Celltype,Identity.Celltype2,Identity.Subtype1,Identity.Subtype2)
+tmp5 = Vcan[[]]  %>% dplyr::select(Identity.Celltype,Identity.Celltype2,Identity.Subtype1,Identity.Subtype2)
+tmp6 = Tan[[]]  %>% dplyr::select(Identity.Celltype,Identity.Celltype2,Identity.Subtype1,Identity.Subtype2)
+tmp7 = Treg[[]]  %>% dplyr::select(Identity.Celltype,Identity.Celltype2,Identity.Subtype1,Identity.Subtype2)
+tmp = rbind(tmp1,tmp2,tmp3,tmp4,tmp5,tmp6,tmp7)
+tmp
+tmp1 = tmp$Identity.Celltype2
+names(tmp1) = rownames(tmp)
+LC = AddMetaData(LC, tmp1, "Identity.Celltype2")
+
+tmp1 = tmp$Identity.Subtype1
+names(tmp1) = rownames(tmp)
+LC = AddMetaData(LC, tmp1, "Identity.Subtype1")
+
+tmp1 = tmp$Identity.Subtype2
+names(tmp1) = rownames(tmp)
+LC = AddMetaData(LC, tmp1, "Identity.Subtype2")
+
+Idents(LC) = LC$Identity.Celltype2
+write.csv(sort(unique(LC$Identity.Celltype2)),"LC.Identity.Celltype2.csv")
+write.csv(sort(unique(LC$Identity.Subtype1 )),"LC.Identity.Subtype1.csv")
+write.csv(sort(unique(LC$Identity.Subtype2 )),"LC.Identity.Subtype2.csv")
+
+tmp =read.csv("LC.Identity.Celltype2.modified.csv")$x
+setdiff(unique(LC$Identity.Celltype2), tmp)
+LC$Identity.Celltype2 = factor(LC$Identity.Celltype2, levels = tmp)
+
+tmp =read.csv("LC.Identity.Subtype1.modified.csv")$x
+setdiff(unique(LC$Identity.Subtype1), tmp)
+LC$Identity.Subtype1 = factor(LC$Identity.Subtype1, levels = tmp)
+
+tmp =read.csv("LC.Identity.Subtype2.modified.csv")$x
+setdiff(unique(LC$Identity.Subtype2), tmp)
+LC$Identity.Subtype2 = factor(LC$Identity.Subtype2, levels = tmp)
+saveRDS(LC, file = "LC.Identity.Subtype2.230404.rds")
+
+Idents(LC) = LC$Identity.Subtype2
+DimPlot(LC)
+```
+
+saveRDS(LC, file = "LC.230330.rds")
+saveRDS(M, file = "LC.M.230330.rds")
+saveRDS(TNK, file = "LC.TNK.230330.rds")
+saveRDS(Div, file = "LC.Div.230330.rds")
+
+saveRDS(NK, file = "LC.NK.Identity.Subtype.230403.rds")
+saveRDS(CD8, file = "LC.CD8.Identity.Subtype.230403.rds")
+saveRDS(Treg, file = "LC.Treg.Identity.Subtype.230403.rds")
+saveRDS(Vcan, file = "LC.Vcan.Identity.Subtype.230403.rds")
+saveRDS(Tan, file = "LC.Tan.Identity.Subtype.230403.rds")
+saveRDS(C1qa, file = "LC.C1qa.Identity.Subtype.230403.rds")
+
+```{r}
+LC <- readRDS("/rshare1/ZETTAI_path_WA_slash_home_KARA/home/siwakorn/Mouse/RDS/LC.Identity.Subtype2.230404.rds")
+Idents(LC) = LC$Identity.Celltype2
+tmp = setdiff(levels(Idents(LC)), c("Fibroblast","Minor","Doublet","LQ" ))
+LC = subset(LC, idents = tmp)
+LC = Clustering1(LC)
+DimPlot(LC)
+saveRDS(LC,"/rshare1/ZETTAI_path_WA_slash_home_KARA/home/siwakorn/Mouse/RDS/LC.rmLQ.230405.rds")
+```
+
+#DE (LLC1)
+DE.LLC.Celltype.230419.r
+```{r}
+library(Seurat)
+library(harmony)
+library(tidyverse)
+options(future.globals.maxSize = 100000 * 1024^2)
+
+LC = readRDS(file = "/rshare1/ZETTAI_path_WA_slash_home_KARA/home/siwakorn/Mouse/RDS/LC.rmLQ.230405.rds")
+LLC = subset(LC, orig.ident == "LLC1")
+LC = 0
+Idents(LLC) = "Batch"
+B1 <- subset(LLC, idents = "Day6")
+B2 <- subset(LLC, idents = "Day1.5")
+B3 <- subset(LLC, idents = "Day14")
+
+LLC = 0
+
+DE.LLC= list()
+DE.LLC$Day1.5 = list()
+DE.LLC$Day6 = list()
+DE.LLC$Day14 = list()
+Idents(B1) = B1$Identity.Celltype
+Idents(B2) = B2$Identity.Celltype
+Idents(B3) = B3$Identity.Celltype
+
+tmp = setdiff(levels(Idents(B1)), c("Fibroblast","Minor","Doublet","LQ" ))
+print(tmp)
+for(i in tmp ){
+      print(i)
+      tryCatch({
+            tmp1 = subset(B1,idents = i)
+            tmp2 = subset(B2,idents = i)
+            tmp3 = subset(B3,idents = i)
+            Idents(tmp1) = "Condition"
+            Idents(tmp2) = "Condition"
+            Idents(tmp3) = "Condition"
+            DE1 = list()
+            tryCatch({DE1[["EP2i-Control"]] = FindMarkers(tmp1, ident.1 = "EP2i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE1[["EP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE1[["EP2iEP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day6[[i]] = DE1 
+            
+            DE2 = list()
+            tryCatch({DE2[["EP2iEP4i-Control"]] = FindMarkers(tmp2, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day1.5[[i]] = DE2
+            
+            
+            DE3 = list()
+            tryCatch({DE3[["EP2iEP4i-Control"]] = FindMarkers(tmp3, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day14[[i]] = DE3
+            
+            saveRDS(DE.LLC,"//home/siwakorn/Mouse/RDS/DE.LLC.Celltype.230419.rds")
+      }, error = function(e){print(e)})
+}
+```
+
+DE.LLC.230405.r
+```{r}
+library(Seurat)
+library(harmony)
+library(tidyverse)
+options(future.globals.maxSize = 100000 * 1024^2)
+
+LC = readRDS(file = "/rshare1/ZETTAI_path_WA_slash_home_KARA/home/siwakorn/Mouse/RDS/LC.rmLQ.230405.rds")
+LLC = subset(LC, orig.ident == "LLC1")
+LC = 0
+Idents(LLC) = "Batch"
+B1 <- subset(LLC, idents = "Day6")
+B2 <- subset(LLC, idents = "Day1.5")
+B3 <- subset(LLC, idents = "Day14")
+
+LLC = 0
+
+DE.LLC= list()
+DE.LLC$Day1.5 = list()
+DE.LLC$Day6 = list()
+DE.LLC$Day14 = list()
+Idents(B1) = B1$Identity.Celltype2
+Idents(B2) = B2$Identity.Celltype2
+Idents(B3) = B3$Identity.Celltype2
+
+tmp = setdiff(levels(Idents(B1)), c("Fibroblast","Minor","Doublet","LQ" ))
+print(tmp)
+for(i in tmp ){
+      print(i)
+      tryCatch({
+            tmp1 = subset(B1,idents = i)
+            tmp2 = subset(B2,idents = i)
+            tmp3 = subset(B3,idents = i)
+            Idents(tmp1) = "Condition"
+            Idents(tmp2) = "Condition"
+            Idents(tmp3) = "Condition"
+            DE1 = list()
+            tryCatch({DE1[["EP2i-Control"]] = FindMarkers(tmp1, ident.1 = "EP2i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE1[["EP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE1[["EP2iEP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day6[[i]] = DE1 
+            
+            DE2 = list()
+            tryCatch({DE2[["EP2iEP4i-Control"]] = FindMarkers(tmp2, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day1.5[[i]] = DE2
+            
+            
+            DE3 = list()
+            tryCatch({DE3[["EP2iEP4i-Control"]] = FindMarkers(tmp3, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day14[[i]] = DE3
+            
+            saveRDS(DE.LLC,"//home/siwakorn/Mouse/RDS/DE.LLC.Celltype2.230405.rds")
+      }, error = function(e){print(e)})
+}
+```
+
+
+DE.LLC.Subtype1.230406.r
+```{r}
+library(Seurat)
+library(harmony)
+library(tidyverse)
+options(future.globals.maxSize = 100000 * 1024^2)
+
+LC = readRDS(file = "/rshare1/ZETTAI_path_WA_slash_home_KARA/home/siwakorn/Mouse/RDS/LC.rmLQ.230405.rds")
+LLC = subset(LC, orig.ident == "LLC1")
+LC = 0
+Idents(LLC) = "Batch"
+B1 <- subset(LLC, idents = "Day6")
+B2 <- subset(LLC, idents = "Day1.5")
+B3 <- subset(LLC, idents = "Day14")
+
+LLC = 0
+
+DE.LLC= list()
+DE.LLC$Day1.5 = list()
+DE.LLC$Day6 = list()
+DE.LLC$Day14 = list()
+Idents(B1) = B1$Identity.Subtype1
+Idents(B2) = B2$Identity.Subtype1
+Idents(B3) = B3$Identity.Subtype1
+
+tmp = setdiff(levels(Idents(B1)), c("Fibroblast","Minor","Doublet","LQ" ))
+print(tmp)
+for(i in tmp ){
+      print(i)
+      tryCatch({
+            tmp1 = subset(B1,idents = i)
+            tmp2 = subset(B2,idents = i)
+            tmp3 = subset(B3,idents = i)
+            Idents(tmp1) = "Condition"
+            Idents(tmp2) = "Condition"
+            Idents(tmp3) = "Condition"
+            DE1 = list()
+            tryCatch({DE1[["EP2i-Control"]] = FindMarkers(tmp1, ident.1 = "EP2i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE1[["EP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE1[["EP2iEP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day6[[i]] = DE1 
+            
+            DE2 = list()
+            tryCatch({DE2[["EP2iEP4i-Control"]] = FindMarkers(tmp2, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day1.5[[i]] = DE2
+            
+            
+            DE3 = list()
+            tryCatch({DE3[["EP2iEP4i-Control"]] = FindMarkers(tmp3, ident.1 = "EP2iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE3[["Depletion-Control"]] = FindMarkers(tmp3, ident.1 = "Depletion", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.LLC$Day14[[i]] = DE3
+            
+            saveRDS(DE.LLC,"//home/siwakorn/Mouse/RDS/DE.LLC.Subtype1.230405.rds")
+      }, error = function(e){print(e)})
+}
+
+```
+
+#DE (CT26)
+DE.CT26.Celltype.230405.r
+```{r}
+library(Seurat)
+library(harmony)
+library(tidyverse)
+options(future.globals.maxSize = 100000 * 1024^2)
+
+LC = readRDS(file = "/rshare1/ZETTAI_path_WA_slash_home_KARA/home/siwakorn/Mouse/RDS/LC.rmLQ.230405.rds")
+CT26 = subset(LC, orig.ident == "CT26")
+LC = 0
+Idents(CT26) = "Batch"
+B1 <- subset(CT26, idents = "Batch1")
+B2 <- subset(CT26, idents = "Batch2")
+CT26= 0
+DE.CT26= list()
+DE.CT26$Batch1 = list()
+DE.CT26$Batch2 = list()
+
+Idents(B1) = B1$Identity.Celltype2
+Idents(B2) = B2$Identity.Celltype2
+
+tmp = setdiff(levels(Idents(B1)), c("Fibroblast","Minor","Doublet","LQ" ) )
+print(tmp)
+for(i in tmp ){
+      print(i)
+      tryCatch({
+            tmp1 = subset(B1,idents = i)
+            tmp2 = subset(B2,idents = i)
+            Idents(tmp1) = "Condition"
+            Idents(tmp2) = "Condition"
+            DE2 = list()
+            tryCatch({DE2[["EP4i-Control"]] = FindMarkers(tmp2, ident.1 = "EP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1i-Control"]] = FindMarkers(tmp2, ident.1 = "PD1i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1iEP4i-Control"]] = FindMarkers(tmp2, ident.1 = "PD1iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1iEP4i-PD1i"]] = FindMarkers(tmp2, ident.1 = "PD1iEP4i", ident.2 = "PD1i", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1iEP4i-EP4i"]] = FindMarkers(tmp2, ident.1 = "PD1iEP4i", ident.2 = "EP4i", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.CT26$Batch2[[i]] = DE2
+            
+            DE1 = list()
+            tryCatch({DE1[["EP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.CT26$Batch1[[i]] = DE1
+            
+            saveRDS(DE.CT26,"//home/siwakorn/Mouse/RDS/DE.CT26.Celltype2.230405.rds")
+      }, error = function(e){print(e)})
+}
+
+```
+
+DE.CT26.Subtype1.230406.r
+```{r}
+library(Seurat)
+library(harmony)
+library(tidyverse)
+options(future.globals.maxSize = 100000 * 1024^2)
+
+LC = readRDS(file = "/rshare1/ZETTAI_path_WA_slash_home_KARA/home/siwakorn/Mouse/RDS/LC.rmLQ.230405.rds")
+CT26 = subset(LC, orig.ident == "CT26")
+LC = 0
+Idents(CT26) = "Batch"
+B1 <- subset(CT26, idents = "Batch1")
+B2 <- subset(CT26, idents = "Batch2")
+CT26= 0
+DE.CT26= list()
+DE.CT26$Batch1 = list()
+DE.CT26$Batch2 = list()
+
+Idents(B1) = B1$Identity.Subtype1
+Idents(B2) = B2$Identity.Subtype1
+
+tmp = setdiff(levels(Idents(B1)), c("Fibroblast","Minor","Doublet","LQ" ) )
+print(tmp)
+for(i in tmp ){
+      print(i)
+      tryCatch({
+            tmp1 = subset(B1,idents = i)
+            tmp2 = subset(B2,idents = i)
+            Idents(tmp1) = "Condition"
+            Idents(tmp2) = "Condition"
+            DE2 = list()
+            tryCatch({DE2[["EP4i-Control"]] = FindMarkers(tmp2, ident.1 = "EP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1i-Control"]] = FindMarkers(tmp2, ident.1 = "PD1i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1iEP4i-Control"]] = FindMarkers(tmp2, ident.1 = "PD1iEP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1iEP4i-PD1i"]] = FindMarkers(tmp2, ident.1 = "PD1iEP4i", ident.2 = "PD1i", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            tryCatch({DE2[["PD1iEP4i-EP4i"]] = FindMarkers(tmp2, ident.1 = "PD1iEP4i", ident.2 = "EP4i", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.CT26$Batch2[[i]] = DE2
+            
+            DE1 = list()
+            tryCatch({DE1[["EP4i-Control"]] = FindMarkers(tmp1, ident.1 = "EP4i", ident.2 = "Control", min.pct = 0.01 , logfc.threshold = 0.01)}, error = function(e){print(e)})
+            DE.CT26$Batch1[[i]] = DE1
+            
+            saveRDS(DE.CT26,"//home/siwakorn/Mouse/RDS/DE.CT26.Subtype1.230405.rds")
+      }, error = function(e){print(e)})
+}
+
+```
+
+
